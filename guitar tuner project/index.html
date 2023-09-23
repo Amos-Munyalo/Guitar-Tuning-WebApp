@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guitar Tuner</title>
+</head>
+<body>
+    <h1>Guitar Tuner</h1>
+    <button id="startButton">Start Tuner</button>
+    <div id="tuner">
+        <p id="note">Note: </p>
+        <p id="detectedFrequency">Detected Frequency: </p>
+    </div>
+
+    <script>
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let isTunerActive = false;
+        let currentNote = '';
+        let currentFrequency = 0;
+
+        document.getElementById('startButton').addEventListener('click', () => {
+            if (!isTunerActive) {
+                startTuner();
+            } else {
+                stopTuner();
+            }
+        });
+
+        function startTuner() {
+            isTunerActive = true;
+            document.getElementById('startButton').textContent = 'Stop Tuner';
+
+            const analyser = audioContext.createAnalyser();
+            const microphoneStream = navigator.mediaDevices.getUserMedia({ audio: true });
+
+            microphoneStream.then((stream) => {
+                const microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.connect(audioContext.destination);
+
+                analyser.fftSize = 2048;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const noteStrings = ['E', 'A', 'D', 'G', 'B', 'e'];
+                const targetFrequencies = [329.63, 220, 146.83, 98, 73.42, 49];
+
+                function updatePitch() {
+                    analyser.getByteFrequencyData(dataArray);
+                    const maxBinIndex = dataArray.indexOf(Math.max(...dataArray));
+                    const frequency = maxBinIndex * audioContext.sampleRate / bufferLength;
+
+                    let closestNote = '';
+                    let closestFrequency = 0;
+                    let minDiff = Infinity;
+
+                    for (let i = 0; i < targetFrequencies.length; i++) {
+                        const diff = Math.abs(frequency - targetFrequencies[i]);
+                        if (diff < minDiff) {
+                            closestNote = noteStrings[i];
+                            closestFrequency = targetFrequencies[i];
+                            minDiff = diff;
+                        }
+                    }
+
+                    currentNote = closestNote;
+                    currentFrequency = frequency.toFixed(2);
+
+                    document.getElementById('note').textContent = `Note: ${currentNote}`;
+                    document.getElementById('detectedFrequency').textContent = `Detected Frequency: ${currentFrequency} Hz`;
+
+                    if (minDiff < 5) {
+                        document.getElementById('note').style.color = 'green';
+                    } else {
+                        document.getElementById('note').style.color = 'red';
+                    }
+
+                    if (isTunerActive) {
+                        requestAnimationFrame(updatePitch);
+                    }
+                }
+
+                updatePitch();
+            }).catch((error) => {
+                console.error('Error accessing microphone:', error);
+            });
+        }
+
+        function stopTuner() {
+            isTunerActive = false;
+            document.getElementById('startButton').textContent = 'Start Tuner';
+            document.getElementById('note').textContent = 'Note: ';
+            document.getElementById('detectedFrequency').textContent = 'Detected Frequency: ';
+        }
+    </script>
+</body>
+</html>
